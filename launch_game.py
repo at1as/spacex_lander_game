@@ -6,22 +6,23 @@ import pygame
 from pygame.locals import *
 import random
 
+
 # Colors
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
-WHITEISH = (215, 215, 215)
-GREEN = (0, 255, 0)
+GREEN = (0, 178, 0)
 RED = (255, 0, 0)
 ORANGE = (255, 165, 0)
-BLUE = (0, 0, 255)
-LIGHT_BLUE = (0, 80, 255)
+BLUE_1 = (0, 0, 255)
+BLUE_2 = (0, 30, 255)
+BLUE_3 = (0, 50, 255)
+BLUE_4 = (0, 90, 255)
 
 # Styles
 FPS = 10
 WINDOW_HEIGHT = 800
 WINDOW_WIDTH = 400
 SIZE = (WINDOW_WIDTH, WINDOW_HEIGHT)
-LINETHICKNESS = 10
 
 
 def draw_rocket(x, y, theta1=0, prior_rocket=None, theta2=None):
@@ -50,43 +51,69 @@ def draw_rocket(x, y, theta1=0, prior_rocket=None, theta2=None):
   screen.blit(rotated_rocket,[new_x, new_y])
 
   if os.environ.get('DEBUG'):
-    print "H: %s W: %s X: %s Y: %s OTHER: %s" %(height2, width2, new_x, new_y, rotated_rocket.get_bounding_rect())
+    print "ROCKET H: %s W: %s X: %s Y: %s OTHER: %s" %(height2, width2, new_x, new_y, rotated_rocket.get_bounding_rect())
   return rotated_rocket, {'height': height2, 'width': width2, 'x': new_x, 'y': new_y, 'theta': theta}
 
 
 def draw_rocket_thrust(x, y):
   # TODO: Rotate thrust through rocket rotation angle
+  '''
   global screen
   thrust = pygame.Rect(x, y, 10, -20)
   pygame.draw.rect(screen, ORANGE, thrust)
   return thrust
+  '''
 
-def draw_barge():
+def draw_barge(barge_offset=0):
   global screen
-  barge = pygame.Rect(WINDOW_WIDTH / 2, WINDOW_HEIGHT - 20, 40, 5)
-  pygame.draw.rect(screen, BLACK, barge)
+  barge = pygame.Rect(WINDOW_WIDTH / 2 + barge_offset, WINDOW_HEIGHT - 32, 40, 7)
+  if os.environ.get('DEBUG'):
+    print "BARGE L: %s R: %s" %(barge.left, barge.right)
   return barge
 
 def draw_water():
   global screen
-  water = pygame.Rect(0, WINDOW_HEIGHT - 15, WINDOW_WIDTH, 15)
-  pygame.draw.rect(screen, BLUE, water)
+  shallow_water = pygame.Rect(0, WINDOW_HEIGHT - 35, WINDOW_WIDTH, 10)
+  water = pygame.Rect(0, WINDOW_HEIGHT - 25, WINDOW_WIDTH, 25)
+  deep_water = pygame.Rect(0, WINDOW_HEIGHT - 10, WINDOW_WIDTH, 10)
+  pygame.draw.rect(screen, BLUE_2, water)
+  pygame.draw.rect(screen, BLUE_3, shallow_water)
+  pygame.draw.rect(screen, BLUE_1, deep_water)
   return water
 
-def draw_fuel_reading(reading):
+def draw_metrics(fuel_reading, rocket_angle, x, y, throttle, wind):
   global screen
-  if reading > 0:
-    screen.blit(font.render('Fuel: %s' %(reading), 1, BLACK), (20, 20))
+  if fuel_reading > 0:
+    screen.blit(small_font.render('Fuel: %s' %(fuel_reading), 1, BLACK), (20, 20))
   else:
-    screen.blit(font.render('Fuel: %s' %(reading), 1, RED), (20, 20))
+    screen.blit(small_font.render('Fuel: %s' %(fuel_reading), 1, RED), (20, 20))
+  screen.blit(small_font.render('Angle: %s' %(rocket_angle), 1, BLACK), (20, 40))
+  screen.blit(small_font.render('X: %s' %(x), 1, BLACK), (20, 60))
+  screen.blit(small_font.render('Y: %s' %(y), 1, BLACK), (20, 80))
+  screen.blit(small_font.render('Rate of Descent: %s' %(throttle), 1, BLACK), (20, 100))
+  screen.blit(small_font.render('Wind: %s' %(wind), 1, BLACK), (20, 120))
 
-def wait_for(key_pressed):
+def draw_arrow(direction, y, x=None):
+  global screen
+  if direction == 'right':
+    if x is None:
+      x = WINDOW_WIDTH - 50
+    pygame.draw.polygon(screen, (0, 0, 0), ((x, y), (x, y + 20), (x + 20, y + 20), (x + 20, y + 30), (x + 30, y + 10), (x + 20, y - 10), (x + 20, y)))
+  else:
+    if x is None:
+      x = 50
+    pygame.draw.polygon(screen, (0, 0, 0), ((x, y), (x, y + 20), (x - 20, y + 20), (x - 20, y + 30), (x - 30, y + 10), (x - 20, y - 10), (x - 20, y)))
+
+def quit():
   while True:
-    for event in pygame.event.get():
-      if event.type == QUIT:
-        pygame.quit()
-      if event.type == KEYDOWN and event.key == K_SPACE:
-        return
+    try:
+      for event in pygame.event.get():
+        if event.type == QUIT:
+          pygame.quit()
+        if event.type == KEYDOWN and event.key == K_q:
+          pygame.quit()
+    except:
+      return
 
 
 if __name__ == "__main__":
@@ -100,11 +127,20 @@ if __name__ == "__main__":
   font = pygame.font.SysFont('Arial', 40)
   small_font = pygame.font.SysFont('Arial', 18)
   
+
   # Intialize game variables
+  # Randomize position and angle on start, within a certain tolerance
   fuel = 1000
   done = False
   throttle = 0
-  x_point, y_point, theta = WINDOW_WIDTH/2 - 100, 0, 10
+  x_offset = random.randint(-200, 200)
+  x_point, y_point = WINDOW_WIDTH/2 - x_offset, 0
+  theta = random.randint(-20, 20)
+  wind = random.randint(-2, 2)
+  barge_offset = 0
+
+  # Limits
+  ANGLE_MAX = 55
 
   # Initialize game environment
   rocket, rocket_pos = draw_rocket(x_point, y_point, theta)
@@ -118,52 +154,76 @@ if __name__ == "__main__":
       if event.type == pygame.QUIT:
         done = True
   
-    # Redraw Screen
-    screen.fill(LIGHT_BLUE)
+    # Redraw Screen at every cycle
+    screen.fill(BLUE_4)
     pressed = pygame.key.get_pressed()
 
+    """
+      Barge: sways from left to right with wind semi-randomly over small interval
+    """
+    #barge = draw_barge(barge_offset)
+    barge_dir = random.randint(0, 1)
     
+    if barge_dir == 0 and barge.left > (WINDOW_WIDTH/2) - 30:
+      barge_offset -= 10
+      #barge = barge.move(10, 0)
+      barge = draw_barge(barge_offset)
+
+    elif barge_dir == 1 and barge.right < (WINDOW_WIDTH/2) + 30:
+      barge_offset += 10
+      #barge = barge.move(-10, 0)
+      barge = draw_barge(barge_offset)
+
+
+    # Draw water and barge with current positions and fuel level
+    water = draw_water()
+    pygame.draw.rect(screen, BLACK, barge)
+    
+
+    """
+      Rocket: Can steer left and right (on ascent and descent), which varies its angle between [45, -45]
+    """
     # No Throttle
     if (not pressed[pygame.K_w] and not pressed[pygame.K_UP]) or fuel == 0:
 
       # throttle should smoothly tend towards 10 (ie., fall by 10)
       # x, y distance traveled should be the throttle components based on throttle
-      throttle = min(10, throttle + 2)
-      ##x_point -= throttle * math.sin(math.radians(theta))
+      throttle = min(10, throttle + 1.5)
+      x_point += throttle * math.sin(math.radians(theta))
+      x_point += wind
       y_point += throttle * math.cos(math.radians(theta))
 
       # Steer Left
       if pressed[pygame.K_a] or pressed[pygame.K_LEFT]:
-        x_point += throttle * math.sin(math.radians(theta))
-        theta = min(40, theta + 2)
-        #theta = max(-40, theta - 2)
+        theta_new = min(ANGLE_MAX, theta + 2)
+
       # Steer Right
       elif pressed[pygame.K_d] or pressed[pygame.K_RIGHT]:
-        x_point += throttle * math.sin(math.radians(theta))
-        theta = max(-40, theta - 2)
-        #theta = min(40, theta + 2)
+        theta_new = max(-ANGLE_MAX, theta - 2)
 
       # Angle should continue at previous angle
       else:
-        x_point += throttle * math.sin(math.radians(theta))
+        theta_new = theta
 
       # Draw new rocket based on these parameters, and update new x and y after rotation and drift
-      rocket, rocket_pos = draw_rocket(x_point, y_point, theta, rocket, theta)
+      rocket, rocket_pos = draw_rocket(x_point, y_point, theta_new, rocket, theta)
       x_point = rocket_pos['x']
       y_point = rocket_pos['y']
+      theta = theta_new
     
     # Throttle Applied
     else:
 
-      # throttle should smoothly tend towards -2 (i.e., rise by 2)
-      throttle = max(-2, throttle -0.5)
+      # throttle should smoothly tend towards -4 (i.e., rise by 4*cos(angle))
+      throttle = max(-4, throttle - 0.5)
       x_point += throttle * math.sin(math.radians(theta))
+      x_point += wind
       y_point += throttle * math.cos(math.radians(theta))
       fuel = max(0, fuel - 10)
 
       # Left biased throttle
       if pressed[pygame.K_a] or pressed[pygame.K_LEFT]:
-        theta_new = min(40, theta + 2)
+        theta_new = min(ANGLE_MAX, theta + 2)
         rocket, rocket_pos = draw_rocket(x_point, y_point, theta_new, rocket, theta)
         x_point = rocket_pos['x']
         y_point = rocket_pos['y']
@@ -171,7 +231,7 @@ if __name__ == "__main__":
         
       # Right biased throttle
       elif pressed[pygame.K_d] or pressed[pygame.K_RIGHT]:
-        theta_new = max(-40, theta - 2)
+        theta_new = max(-ANGLE_MAX, theta - 2)
         rocket, rocket_pos = draw_rocket(x_point, y_point, theta_new, rocket, theta)
         x_point = rocket_pos['x']
         y_point = rocket_pos['y']
@@ -186,53 +246,44 @@ if __name__ == "__main__":
       thrust = draw_rocket_thrust(rocket_pos['x'] + rocket_pos['width']/2, rocket_pos['y'] + rocket_pos['height'])
 
 
-    # Barge sways from left to right with wind semi-randomly over small interval
-    barge_dir = random.randint(0, 1)
-    barge = draw_barge()
-    
-    if barge_dir == 0 and barge.left > (WINDOW_WIDTH/2) - 100:
-      barge = barge.move(10, 0)
+    # Update Metrics and screen
+    if x_point > WINDOW_WIDTH:
+      draw_arrow('right', y_point)
+    elif x_point < 0:
+      draw_arrow('left', y_point)
 
-    elif barge_dir == 1 and barge.right < (WINDOW_WIDTH/2) + 100:
-      barge = barge.move(-10, 0)
-
-
-    # Draw water and barge with current positions and fuel level
-    draw_fuel_reading(fuel)
-    water = draw_water()
-    pygame.draw.rect(screen, BLACK, barge)
+    draw_metrics(fuel, theta, x_point, y_point, throttle, wind)
     pygame.display.flip()
 
 
+    """
+      Collision Detection
+    """
     # Check if rocket has collided with barge or water
     if barge.collidepoint(rocket_pos['x'] + rocket_pos['width']/2, rocket_pos['y'] + rocket_pos['height']):
       
       # Rocket is descending slowly, and within the landing angle of tolerance [-10, 10]
       if throttle < 5 and theta <= 10 and theta >= -10:
-        screen.blit(small_font.render('Successful Landing!', 1, WHITE), (100, WINDOW_WIDTH/2))
-        print "Success!"
+        screen.blit(small_font.render('Successful Landing!', 1, GREEN), (110, WINDOW_HEIGHT/2))
+      elif throttle < 5:
+        screen.blit(small_font.render('Rocket came down at bad angle!', 1, WHITE), (75, WINDOW_HEIGHT/2))
       else:
-        screen.blit(small_font.render('Rocket came down too fast', 1, WHITE), (90, WINDOW_WIDTH/2))
-        print "Too Fast!"
+        screen.blit(small_font.render('Rocket came down too fast', 1, WHITE), (90, WINDOW_HEIGHT/2))
       done = True
 
     elif water.collidepoint(rocket_pos['x'], rocket_pos['y'] + rocket_pos['height']):
-      screen.blit(small_font.render('Rocket missed the barge', 1, WHITE), (100, WINDOW_WIDTH/2))
-      print "Rocket missed the barge!"
+      screen.blit(small_font.render('Rocket missed the barge', 1, WHITE), (100, WINDOW_HEIGHT/2))
       done = True
 
     elif y_point > WINDOW_HEIGHT:
-      screen.blit(small_font.render('Rocket missed the barge', 1, WHITE), (60, WINDOW_WIDTH/2))
+      screen.blit(small_font.render('Rocket missed the barge', 1, WHITE), (100, WINDOW_HEIGHT/2))
       done = True
 
     clock.tick(FPS)
-  
     pygame.display.flip()
 
 
   # Wait for user keypress to quit...
-  screen.blit(small_font.render('Press SPACE to Quit', 1, BLACK), (90, 120))
+  screen.blit(small_font.render('Press Q to Quit, Space to Continue', 1, WHITE), (60, 250))
   pygame.display.flip()
-  wait_for('blah')
-  
-  pygame.quit()
+  quit()
